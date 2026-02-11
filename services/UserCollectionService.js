@@ -1,4 +1,3 @@
-import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import { UserCoin } from '../models';
 import firebaseService from './FirebaseService';
@@ -66,6 +65,7 @@ class UserCollectionService {
    * Инициализация SQLite
    */
   async _initializeSQLite() {
+    const SQLite = await import('expo-sqlite');
     this.db = await SQLite.openDatabaseAsync('coin_catalog.db');
     await this._createUserTables();
   }
