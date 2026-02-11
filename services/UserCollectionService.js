@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { UserCoin } from '../models';
 import firebaseService from './FirebaseService';
 import { firestoreDatabaseService } from './FirestoreDatabaseService';
+import { openDatabaseAsync } from './SQLiteAdapter';
 import { db as firestoreDb } from '../config/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -65,8 +66,7 @@ class UserCollectionService {
    * Инициализация SQLite
    */
   async _initializeSQLite() {
-    const SQLite = await import('expo-sqlite');
-    this.db = await SQLite.openDatabaseAsync('coin_catalog.db');
+    this.db = await openDatabaseAsync('coin_catalog.db');
     await this._createUserTables();
   }
 
