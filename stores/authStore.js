@@ -1,14 +1,22 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import Constants from 'expo-constants';
 import firebaseService from '../services/FirebaseService';
+import { runtimeConfig } from '../config/runtime';
+import { logger } from '../utils/logger';
+import { fetchJsonWithTimeout, getErrorMessage } from '../utils/network';
 
 const AUTH_KEY = 'coin_catalog_auth';
 const isWeb = Platform.OS === 'web';
 
-// API URL из .env или localhost
-const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3000';
+// API URL из runtime-конфигурации
+const API_URL = runtimeConfig.apiUrl;
+const OFFLINE_AUTH_ALLOWED = runtimeConfig.allowOfflineAuth;
+
+function buildApiUrl(path) {
+  if (!API_URL) return '';
+  return `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 // Storage helpers for cross-platform
 const storage = {
@@ -50,7 +58,7 @@ export const useAuthStore = create((set, get) => ({
         
         // Если юзер залогинился через offline, а Firebase теперь доступен — сбрасываем
         if (data.provider === 'local' && firebaseService.isAvailable()) {
-          console.log('Offline session detected, Firebase now available — clearing stale session');
+          logger.info('auth', 'Offline session detected, clearing stale local session');
           await storage.removeItem(AUTH_KEY);
           set({ isGuest: true, isLoading: false });
           return null;
@@ -73,11 +81,11 @@ export const useAuthStore = create((set, get) => ({
                 data.user = user;
                 await storage.setItem(AUTH_KEY, JSON.stringify(data));
                 set({ user, isPro: user.isPro || false });
-                console.log('Profile refreshed from Firebase, isPro:', user.isPro);
+                logger.debug('auth', 'Profile refreshed from Firebase');
               }
             }
           } catch (refreshError) {
-            console.warn('Could not refresh profile from Firebase:', refreshError.message);
+            logger.warn('auth', 'Could not refresh profile from Firebase', refreshError?.message);
           }
         }
         
@@ -87,7 +95,7 @@ export const useAuthStore = create((set, get) => ({
         return null;
       }
     } catch (error) {
-      console.error('Error loading user:', error);
+      logger.error('auth', 'Error loading user', error);
       set({ isGuest: true, isLoading: false });
       return null;
     }
@@ -95,11 +103,11 @@ export const useAuthStore = create((set, get) => ({
 
   // Login
   login: async (email, password) => {
-    console.log('Login called with:', { email, hasPassword: !!password });
+    logger.debug('auth', 'Login requested', { email, hasPassword: !!password });
     
     // Пробуем Firebase сначала
     if (firebaseService.isAvailable()) {
-      console.log('Attempting Firebase login');
+      logger.debug('auth', 'Attempting Firebase login');
       const firebaseResult = await firebaseService.login(email, password);
       
       if (firebaseResult.success) {
@@ -119,20 +127,27 @@ export const useAuthStore = create((set, get) => ({
           await setUserId(firebaseResult.user.id);
           await userCollectionService.loadFromFirebase();
         } catch (error) {
-          console.warn('Error loading collection from Firebase:', error);
+          logger.warn('auth', 'Error loading collection from Firebase', error);
         }
-        
-        console.log('Login successful (Firebase)');
+
+        logger.debug('auth', 'Firebase login successful');
         return { success: true };
       } else {
-        console.warn('Firebase login failed:', firebaseResult.error);
+        logger.warn('auth', 'Firebase login failed', firebaseResult.error);
         return { success: false, error: firebaseResult.error };
       }
     }
-    
+
+    if (!OFFLINE_AUTH_ALLOWED) {
+      return {
+        success: false,
+        error: 'Сервис авторизации временно недоступен. Попробуйте позже.',
+      };
+    }
+
     // Fallback на локальную авторизацию
     try {
-      console.log('Using offline login');
+      logger.warn('auth', 'Using offline login fallback');
       const user = { 
         email, 
         name: email.split('@')[0],
@@ -144,37 +159,44 @@ export const useAuthStore = create((set, get) => ({
         provider: 'local',
       }));
       set({ user, isGuest: false });
-      
-      console.log('Login successful (offline)');
+
+      logger.debug('auth', 'Offline login successful');
       return { success: true, warning: 'Работа в офлайн режиме' };
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('auth', 'Login error', error);
       return { success: false, error: 'Ошибка входа' };
     }
   },
 
   // Register
   register: async (email, password, nickname, photo = null) => {
-    console.log('Register called with:', { email, hasPassword: !!password, nickname, hasPhoto: !!photo });
+    logger.debug('auth', 'Register requested', { email, nickname, hasPhoto: !!photo });
     
     // Пробуем Firebase сначала
     if (firebaseService.isAvailable()) {
-      console.log('Attempting Firebase registration');
+      logger.debug('auth', 'Attempting Firebase registration');
       const firebaseResult = await firebaseService.register(email, password, nickname, photo);
       
       if (firebaseResult.success) {
         // НЕ сохраняем пользователя локально - он должен подтвердить email
-        console.log('Registration successful (Firebase) - awaiting email verification');
+        logger.debug('auth', 'Firebase registration succeeded; waiting email verification');
         return { success: true, requiresVerification: true };
       } else {
-        console.warn('Firebase registration failed:', firebaseResult.error);
+        logger.warn('auth', 'Firebase registration failed', firebaseResult.error);
         return { success: false, error: firebaseResult.error };
       }
     }
-    
+
+    if (!OFFLINE_AUTH_ALLOWED) {
+      return {
+        success: false,
+        error: 'Регистрация временно недоступна. Попробуйте позже.',
+      };
+    }
+
     // Fallback на локальную регистрацию (только для разработки)
     try {
-      console.log('Using offline registration');
+      logger.warn('auth', 'Using offline registration fallback');
       
       const user = { 
         email, 
@@ -188,11 +210,11 @@ export const useAuthStore = create((set, get) => ({
         provider: 'local',
       }));
       set({ user, isGuest: false });
-      
-      console.log('Registration successful (offline)');
+
+      logger.debug('auth', 'Offline registration successful');
       return { success: true, warning: 'Работа в офлайн режиме' };
     } catch (storageError) {
-      console.error('Storage error:', storageError);
+      logger.error('auth', 'Storage error during registration', storageError);
       return { success: false, error: 'Ошибка сохранения данных' };
     }
   },
@@ -200,7 +222,7 @@ export const useAuthStore = create((set, get) => ({
   // Logout
   logout: async () => {
     try {
-      console.log('Logout called');
+      logger.debug('auth', 'Logout requested');
       
       // Проверяем провайдера
       const stored = await storage.getItem(AUTH_KEY);
@@ -221,10 +243,10 @@ export const useAuthStore = create((set, get) => ({
       
       // Обновляем состояние
       set({ user: null, isGuest: true, isPro: false });
-      
-      console.log('Logout successful');
+
+      logger.debug('auth', 'Logout successful');
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('auth', 'Logout error', error);
     }
   },
 
@@ -238,7 +260,7 @@ export const useAuthStore = create((set, get) => ({
       }
       return null;
     } catch (error) {
-      console.error('Error getting token:', error);
+      logger.error('auth', 'Error getting token', error);
       return null;
     }
   },
@@ -251,22 +273,30 @@ export const useAuthStore = create((set, get) => ({
         return { success: false, error: 'Пользователь не авторизован' };
       }
 
+      if (!API_URL) {
+        return { success: false, error: 'API URL не настроен' };
+      }
+
+      const normalizedCode = String(proCode || '').trim();
+      if (!normalizedCode) {
+        return { success: false, error: 'Введите PRO код' };
+      }
+
       // PRO статус устанавливается ТОЛЬКО через backend
       const token = await firebaseService.getCurrentUser()?.getIdToken();
       if (!token) {
         return { success: false, error: 'Не авторизован' };
       }
 
-      const response = await fetch(`${API_URL}/api/v1/auth/activate-pro`, {
+      const endpoint = buildApiUrl('/api/v1/auth/activate-pro');
+      const result = await fetchJsonWithTimeout(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ proCode }),
-      });
-
-      const result = await response.json();
+        body: JSON.stringify({ proCode: normalizedCode }),
+      }, runtimeConfig.requestTimeoutMs);
       
       if (result.success) {
         const updatedUser = { ...user, isPro: true };
@@ -278,15 +308,15 @@ export const useAuthStore = create((set, get) => ({
           data.user = updatedUser;
           await storage.setItem(AUTH_KEY, JSON.stringify(data));
         }
-        
-        console.log('PRO status activated via backend');
+
+        logger.info('auth', 'PRO status activated via backend');
         return { success: true };
       }
       
       return { success: false, error: result.error || 'Ошибка активации PRO' };
     } catch (error) {
-      console.error('Error updating PRO status:', error);
-      return { success: false, error: error.message };
+      logger.error('auth', 'Error updating PRO status', error);
+      return { success: false, error: getErrorMessage(error, 'Ошибка активации PRO') };
     }
   },
 
@@ -309,7 +339,7 @@ export const useAuthStore = create((set, get) => ({
       
       return { success: false, isPro: false };
     } catch (error) {
-      console.error('Error checking PRO status:', error);
+      logger.error('auth', 'Error checking PRO status', error);
       return { success: false, isPro: false };
     }
   },

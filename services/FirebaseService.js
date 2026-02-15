@@ -19,6 +19,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { logger } from '../utils/logger';
 
 /**
  * FirebaseService - сервис для работы с Firebase
@@ -43,33 +44,33 @@ class FirebaseService {
    */
   async register(email, password, nickname, photo = null) {
     try {
-      console.log('FirebaseService.register called with:', { email, nickname, hasPhoto: !!photo });
+      logger.debug('firebase-service', 'Register called', { email, nickname, hasPhoto: !!photo });
       
       if (!this.isAvailable()) {
-        console.error('Firebase not available');
+        logger.error('firebase-service', 'Firebase not available');
         throw new Error('Firebase not initialized');
       }
 
-      console.log('Creating user in Firebase Auth...');
+      logger.debug('firebase-service', 'Creating user in Firebase Auth');
       // Создаем пользователя в Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         this.auth,
         email,
         password
       );
-      console.log('User created in Firebase Auth:', userCredential.user.uid);
+      logger.debug('firebase-service', 'User created in Firebase Auth', userCredential.user.uid);
 
       const user = userCredential.user;
 
       // Обновляем профиль с именем
       if (nickname) {
-        console.log('Updating user profile with nickname...');
+        logger.debug('firebase-service', 'Updating user profile with nickname');
         await updateProfile(user, { displayName: nickname });
-        console.log('Profile updated');
+        logger.debug('firebase-service', 'Profile updated');
       }
 
       // Создаем документ пользователя в Firestore
-      console.log('Creating user document in Firestore...');
+      logger.debug('firebase-service', 'Creating user document in Firestore');
       await setDoc(doc(this.db, 'users', user.uid), {
         email: user.email,
         nickname: nickname || email.split('@')[0],
@@ -84,11 +85,11 @@ class FirebaseService {
       });
 
       // Отправляем email верификацию
-      console.log('Sending email verification...');
+      logger.debug('firebase-service', 'Sending email verification');
       await sendEmailVerification(user);
-      console.log('Email verification sent to:', user.email);
+      logger.debug('firebase-service', 'Email verification sent');
       
-      console.log('Firebase registration successful:', user.uid);
+      logger.info('firebase-service', 'Firebase registration successful');
 
       return {
         success: true,
@@ -100,10 +101,7 @@ class FirebaseService {
         },
       };
     } catch (error) {
-      console.error('Firebase registration error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      console.error('Full error:', JSON.stringify(error, null, 2));
+      logger.error('firebase-service', 'Firebase registration error', error);
       
       let errorMessage = 'Ошибка регистрации';
       if (error.code === 'auth/email-already-in-use') {
@@ -141,7 +139,7 @@ class FirebaseService {
       const userDoc = await getDoc(doc(this.db, 'users', user.uid));
       const userData = userDoc.data();
 
-      console.log('Firebase login successful:', user.uid);
+      logger.debug('firebase-service', 'Firebase login successful');
 
       return {
         success: true,
@@ -154,7 +152,7 @@ class FirebaseService {
         },
       };
     } catch (error) {
-      console.error('Firebase login error:', error);
+      logger.error('firebase-service', 'Firebase login error', error);
       
       let errorMessage = 'Ошибка входа';
       if (error.code === 'auth/user-not-found') {
@@ -179,10 +177,10 @@ class FirebaseService {
       }
 
       await signOut(this.auth);
-      console.log('Firebase logout successful');
+      logger.debug('firebase-service', 'Firebase logout successful');
       return { success: true };
     } catch (error) {
-      console.error('Firebase logout error:', error);
+      logger.error('firebase-service', 'Firebase logout error', error);
       return { success: false, error: 'Ошибка выхода' };
     }
   }
@@ -206,7 +204,7 @@ class FirebaseService {
       }
       return null;
     } catch (error) {
-      console.error('Error getting user profile:', error);
+      logger.error('firebase-service', 'Error getting user profile', error);
       return null;
     }
   }
@@ -255,10 +253,10 @@ class FirebaseService {
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
-      console.log('Collection synced to Firebase:', coins.length, 'coins');
+      logger.debug('firebase-service', 'Collection synced to Firebase', coins.length);
       return { success: true };
     } catch (error) {
-      console.error('Firebase sync error:', error);
+      logger.error('firebase-service', 'Firebase sync error', error);
       return { success: false, error: error.message };
     }
   }
@@ -277,13 +275,13 @@ class FirebaseService {
 
       if (collectionDoc.exists()) {
         const data = collectionDoc.data();
-        console.log('Collection loaded from Firebase:', data.coins?.length || 0, 'coins');
+        logger.debug('firebase-service', 'Collection loaded from Firebase', data.coins?.length || 0);
         return { success: true, coins: data.coins || [] };
       }
 
       return { success: true, coins: [] };
     } catch (error) {
-      console.error('Firebase load error:', error);
+      logger.error('firebase-service', 'Firebase load error', error);
       return { success: false, error: error.message, coins: [] };
     }
   }
@@ -320,10 +318,10 @@ class FirebaseService {
         updatedAt: serverTimestamp(),
       });
 
-      console.log('Coin added to Firebase collection');
+      logger.debug('firebase-service', 'Coin added to Firebase collection');
       return { success: true };
     } catch (error) {
-      console.error('Firebase add coin error:', error);
+      logger.error('firebase-service', 'Firebase add coin error', error);
       return { success: false, error: error.message };
     }
   }
@@ -350,12 +348,12 @@ class FirebaseService {
           updatedAt: serverTimestamp(),
         });
 
-        console.log('Coin removed from Firebase collection');
+        logger.debug('firebase-service', 'Coin removed from Firebase collection');
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Firebase remove coin error:', error);
+      logger.error('firebase-service', 'Firebase remove coin error', error);
       return { success: false, error: error.message };
     }
   }
@@ -382,10 +380,10 @@ class FirebaseService {
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
-      console.log('Wishlist synced to Firebase:', wishlist.length, 'coins');
+      logger.debug('firebase-service', 'Wishlist synced to Firebase', wishlist.length);
       return { success: true };
     } catch (error) {
-      console.error('Firebase wishlist sync error:', error);
+      logger.error('firebase-service', 'Firebase wishlist sync error', error);
       return { success: false, error: error.message };
     }
   }
@@ -404,13 +402,13 @@ class FirebaseService {
 
       if (wishlistDoc.exists()) {
         const data = wishlistDoc.data();
-        console.log('Wishlist loaded from Firebase:', data.coins?.length || 0, 'coins');
+        logger.debug('firebase-service', 'Wishlist loaded from Firebase', data.coins?.length || 0);
         return { success: true, coins: data.coins || [] };
       }
 
       return { success: true, coins: [] };
     } catch (error) {
-      console.error('Firebase wishlist load error:', error);
+      logger.error('firebase-service', 'Firebase wishlist load error', error);
       return { success: false, error: error.message, coins: [] };
     }
   }
@@ -440,7 +438,7 @@ class FirebaseService {
 
       return { success: false, isPro: false };
     } catch (error) {
-      console.error('Error checking PRO status:', error);
+      logger.error('firebase-service', 'Error checking PRO status', error);
       return { success: false, error: error.message, isPro: false };
     }
   }

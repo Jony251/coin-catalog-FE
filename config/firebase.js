@@ -1,62 +1,56 @@
-import { initializeApp } from 'firebase/app';
+import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import Constants from 'expo-constants';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
+import { Platform } from 'react-native';
+import { runtimeConfig } from './runtime';
+import { logger } from '../utils/logger';
 
-// Firebase конфигурация загружается из .env через app.config.js
-const extra = Constants.expoConfig?.extra || {};
+const firebaseConfig = runtimeConfig.firebase;
 
-console.log('🔧 Firebase config check:', {
-  hasApiKey: !!extra.firebaseApiKey,
-  hasProjectId: !!extra.firebaseProjectId,
-  hasAppId: !!extra.firebaseAppId,
-  projectId: extra.firebaseProjectId || 'MISSING',
-  extraKeys: Object.keys(extra),
-});
+let app = null;
+let auth = null;
+let db = null;
 
-const firebaseConfig = {
-  apiKey: extra.firebaseApiKey,
-  authDomain: extra.firebaseAuthDomain,
-  projectId: extra.firebaseProjectId,
-  storageBucket: extra.firebaseStorageBucket,
-  messagingSenderId: extra.firebaseMessagingSenderId,
-  appId: extra.firebaseAppId,
-  measurementId: extra.firebaseMeasurementId
-};
-
-if (!firebaseConfig.apiKey) {
-  console.error('❌ Firebase API key not found! Make sure .env file exists with FIREBASE_API_KEY');
-  console.error('❌ Restart Expo dev server after creating/editing .env file!');
-}
-
-// Инициализация Firebase
-let app;
-let auth;
-let db;
-
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  
-  // Инициализируем Firestore с расширенным офлайн кэшированием
-  // Это позволяет работать полностью офлайн после первой загрузки
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  });
-  
-  console.log('✅ Firebase initialized with offline persistence');
-} catch (error) {
-  console.error('❌ Firebase initialization error:', error);
-  // Fallback на обычную инициализацию
+if (!runtimeConfig.isFirebaseConfigured) {
+  logger.warn(
+    'firebase',
+    `Firebase disabled. Missing config keys: ${runtimeConfig.missingFirebaseKeys.join(', ')}`
+  );
+} else {
   try {
-    db = getFirestore(app);
-    console.log('⚠️ Firebase initialized without enhanced persistence');
-  } catch (fallbackError) {
-    console.error('❌ Fallback initialization failed:', fallbackError);
+    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+
+    // Enhanced multi-tab cache is supported on web only.
+    if (Platform.OS === 'web') {
+      try {
+        db = initializeFirestore(app, {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+          }),
+        });
+      } catch (cacheError) {
+        logger.warn(
+          'firebase',
+          'Enhanced Firestore cache unavailable, using default Firestore client',
+          cacheError?.message || cacheError
+        );
+      }
+    }
+
+    db = db || getFirestore(app);
+  } catch (error) {
+    logger.error('firebase', 'Firebase initialization failed', error);
+    app = null;
+    auth = null;
+    db = null;
   }
 }
 
-export { auth, db };
+export { app, auth, db };
 export default app;

@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initDatabase } from '../services/database';
 import { useAuthStore } from '../stores/authStore';
 import DataLoadingScreen from '../components/DataLoadingScreen';
+import { runtimeConfig } from '../config/runtime';
+import { logger } from '../utils/logger';
 
 // Fixed height for Android navigation bar
 const ANDROID_NAV_BAR_HEIGHT = 48;
@@ -19,10 +21,19 @@ export default function RootLayout() {
   const [isDataLoading, setIsDataLoading] = useState(true);
 
   useEffect(() => {
+    if (runtimeConfig.hasUnsafeProductionApiUrl) {
+      logger.warn(
+        'config',
+        'Production build uses missing/unsafe API_URL. Set HTTPS public backend URL before release.'
+      );
+    }
+  }, []);
+
+  useEffect(() => {
     // Initialize database and load user on app start
     const init = async () => {
       try {
-        console.log('🚀 Initializing app...');
+        logger.info('app', 'Initializing application');
         await initDatabase(); // Сначала инициализируем без userId
         const userData = await loadUser(); // Загружаем пользователя
         
@@ -38,15 +49,15 @@ export default function RootLayout() {
             await userCollectionService.syncAll();
             // 2. Загружаем обновления с сервера
             await userCollectionService.loadFromFirebase();
-            console.log('✅ Collection synced');
+            logger.debug('app', 'Collection sync completed');
           } catch (syncError) {
-            console.warn('Collection sync error (non-critical):', syncError.message);
+            logger.warn('app', 'Collection sync error (non-critical)', syncError?.message);
           }
         }
-        
-        console.log('✅ App initialized');
+
+        logger.info('app', 'Application initialized');
       } catch (error) {
-        console.error('❌ Initialization error:', error);
+        logger.error('app', 'Initialization error', error);
       } finally {
         setIsDataLoading(false);
       }

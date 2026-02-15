@@ -2,15 +2,16 @@
  * NumistaService - сервис для работы с Numista API
  * API Documentation: https://ru.numista.com/api/doc/index.php
  */
-import Constants from 'expo-constants';
+import { runtimeConfig } from '../config/runtime';
+import { logger } from '../utils/logger';
+import { fetchJsonWithTimeout } from '../utils/network';
 
-const extra = Constants.expoConfig?.extra || {};
 const NUMISTA_API_BASE = 'https://api.numista.com/api/v3';
 
 class NumistaService {
   constructor() {
-    this.apiKey = extra.numistaApiKey || '';
-    this.userId = extra.numistaUserId || '';
+    this.apiKey = runtimeConfig.numista.apiKey || '';
+    this.userId = runtimeConfig.numista.userId || '';
     this.requestCount = 0;
     this.maxRequests = 2000; // 2000 запросов в месяц
   }
@@ -19,6 +20,10 @@ class NumistaService {
    * Базовый запрос к API
    */
   async makeRequest(endpoint, params = {}) {
+    if (!this.apiKey) {
+      throw new Error('Numista API key is not configured');
+    }
+
     if (this.requestCount >= this.maxRequests) {
       throw new Error('Превышен лимит запросов к Numista API');
     }
@@ -31,23 +36,23 @@ class NumistaService {
     const url = `${NUMISTA_API_BASE}${endpoint}?${queryParams}`;
 
     try {
-      const response = await fetch(url, {
+      const result = await fetchJsonWithTimeout(
+        url,
+        {
         headers: {
           'Numista-API-Key': this.apiKey,
           'Content-Type': 'application/json',
         },
-      });
+        },
+        runtimeConfig.requestTimeoutMs
+      );
 
       this.requestCount++;
-      console.log(`📊 Numista API запрос ${this.requestCount}/${this.maxRequests}`);
+      logger.debug('numista', `API request ${this.requestCount}/${this.maxRequests}`);
 
-      if (!response.ok) {
-        throw new Error(`Numista API error: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
+      return result;
     } catch (error) {
-      console.error('Numista API request failed:', error);
+      logger.error('numista', 'Numista API request failed', error);
       throw error;
     }
   }
@@ -104,7 +109,7 @@ class NumistaService {
       const data = await this.makeRequest(`/types/${typeId}/prices`);
       return data.prices || [];
     } catch (error) {
-      console.warn(`Не удалось получить цены для монеты ${typeId}:`, error);
+      logger.warn('numista', `Не удалось получить цены для монеты ${typeId}`, error);
       return [];
     }
   }
@@ -116,7 +121,7 @@ class NumistaService {
    * @param {number} endYear - Конец правления
    */
   async searchRussianEmpireCoins(rulerName, startYear, endYear) {
-    console.log(`🔍 Поиск монет для ${rulerName} (${startYear}-${endYear})...`);
+    logger.info('numista', `Поиск монет для ${rulerName} (${startYear}-${endYear})...`);
     
     const allCoins = [];
     let page = 1;
@@ -143,7 +148,7 @@ class NumistaService {
 
         allCoins.push(...filteredCoins);
         
-        console.log(`   Страница ${page}: найдено ${filteredCoins.length} монет`);
+        logger.debug('numista', `Страница ${page}: найдено ${filteredCoins.length} монет`);
 
         // Проверяем, есть ли еще страницы
         hasMore = result.types.length === 50;
@@ -152,12 +157,12 @@ class NumistaService {
         // Задержка между запросами (чтобы не превысить rate limit)
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error) {
-        console.error(`Ошибка при загрузке страницы ${page}:`, error);
+        logger.error('numista', `Ошибка при загрузке страницы ${page}`, error);
         hasMore = false;
       }
     }
 
-    console.log(`✅ Всего найдено ${allCoins.length} монет для ${rulerName}`);
+    logger.info('numista', `Всего найдено ${allCoins.length} монет для ${rulerName}`);
     return allCoins;
   }
 

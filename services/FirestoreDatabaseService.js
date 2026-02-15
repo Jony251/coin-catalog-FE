@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
 import { Country, Period, Ruler, Coin } from '../models/index.js';
+import { logger } from '../utils/logger';
 
 class FirestoreDatabaseService {
   constructor() {
@@ -35,8 +36,8 @@ class FirestoreDatabaseService {
     if (this.isInitialized) return;
 
     this.isInitialized = true;
-    console.log('✅ FirestoreDatabaseService initialized');
-    console.log('📦 Offline caching enabled - данные доступны без интернета');
+    logger.debug('firestore-db', 'FirestoreDatabaseService initialized');
+    logger.debug('firestore-db', 'Offline caching enabled');
   }
 
   /**
@@ -59,10 +60,10 @@ class FirestoreDatabaseService {
       // Кэшируем результат
       this.cache.countries = countries;
       
-      console.log(`📍 Загружено стран: ${countries.length}`);
+      logger.debug('firestore-db', `Загружено стран: ${countries.length}`);
       return countries;
     } catch (error) {
-      console.error('Error loading countries:', error);
+      logger.error('firestore-db', 'Error loading countries', error);
       return [];
     }
   }
@@ -93,10 +94,10 @@ class FirestoreDatabaseService {
       // Кэшируем результат
       this.cache.periods[countryId] = periods;
       
-      console.log(`📅 Загружено периодов для ${countryId}: ${periods.length}`);
+      logger.debug('firestore-db', `Загружено периодов для ${countryId}: ${periods.length}`);
       return periods;
     } catch (error) {
-      console.error('Error loading periods:', error);
+      logger.error('firestore-db', 'Error loading periods', error);
       return [];
     }
   }
@@ -127,10 +128,10 @@ class FirestoreDatabaseService {
       // Кэшируем результат
       this.cache.rulers[periodId] = rulers;
       
-      console.log(`👑 Загружено правителей для ${periodId}: ${rulers.length}`);
+      logger.debug('firestore-db', `Загружено правителей для ${periodId}: ${rulers.length}`);
       return rulers;
     } catch (error) {
-      console.error('Error loading rulers:', error);
+      logger.error('firestore-db', 'Error loading rulers', error);
       return [];
     }
   }
@@ -151,7 +152,7 @@ class FirestoreDatabaseService {
       
       return null;
     } catch (error) {
-      console.error('Error loading ruler:', error);
+      logger.error('firestore-db', 'Error loading ruler', error);
       return null;
     }
   }
@@ -183,10 +184,10 @@ class FirestoreDatabaseService {
       // Кэшируем результат
       this.cache.coins[cacheKey] = coins;
       
-      console.log(`🪙 Загружено монет для правителя ${rulerId}: ${coins.length}`);
+      logger.debug('firestore-db', `Загружено монет для правителя ${rulerId}: ${coins.length}`);
       return coins;
     } catch (error) {
-      console.error('Error loading coins:', error);
+      logger.error('firestore-db', 'Error loading coins', error);
       return [];
     }
   }
@@ -223,10 +224,13 @@ class FirestoreDatabaseService {
         return type === denominationType;
       });
       
-      console.log(`🪙 Загружено монет ${denominationType} для ${rulerId}: ${filtered.length}`);
+      logger.debug(
+        'firestore-db',
+        `Загружено монет ${denominationType} для ${rulerId}: ${filtered.length}`
+      );
       return filtered;
     } catch (error) {
-      console.error('Error loading coins by denomination:', error);
+      logger.error('firestore-db', 'Error loading coins by denomination', error);
       return [];
     }
   }
@@ -247,7 +251,7 @@ class FirestoreDatabaseService {
       
       return null;
     } catch (error) {
-      console.error('Error loading coin:', error);
+      logger.error('firestore-db', 'Error loading coin', error);
       return null;
     }
   }
@@ -278,10 +282,10 @@ class FirestoreDatabaseService {
         coin.year?.toString().includes(searchQuery)
       );
       
-      console.log(`🔍 Найдено монет: ${results.length}`);
+      logger.debug('firestore-db', `Найдено монет: ${results.length}`);
       return results.slice(0, 50); // Ограничиваем результаты
     } catch (error) {
-      console.error('Error searching coins:', error);
+      logger.error('firestore-db', 'Error searching coins', error);
       return [];
     }
   }
@@ -328,7 +332,7 @@ class FirestoreDatabaseService {
       const order = ['gold', 'silver_ruble', 'silver_small', 'copper', 'commemorative', 'token'];
       return Object.values(groups).sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
     } catch (error) {
-      console.error('Error loading denominations:', error);
+      logger.error('firestore-db', 'Error loading denominations', error);
       return [];
     }
   }
@@ -358,7 +362,7 @@ class FirestoreDatabaseService {
       rulers: {},
       coins: {},
     };
-    console.log('🗑️ Cache cleared');
+    logger.debug('firestore-db', 'Cache cleared');
   }
 }
 

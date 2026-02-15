@@ -1,5 +1,23 @@
 import 'dotenv/config';
 
+const appEnv = String(process.env.APP_ENV || process.env.NODE_ENV || 'development').toLowerCase();
+const isProduction = appEnv === 'production';
+
+const parseBoolean = (value, defaultValue) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return defaultValue;
+};
+
+const parseTimeout = (value, defaultValue = 15000) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+};
+
 export default {
   expo: {
     name: "Coin Catalog",
@@ -37,7 +55,11 @@ export default {
       "expo-secure-store"
     ],
     extra: {
-      apiUrl: process.env.API_URL || "http://192.168.10.6:3000",
+      appEnv,
+      apiUrl: process.env.API_URL || "",
+      allowOfflineAuth: parseBoolean(process.env.ALLOW_OFFLINE_AUTH, !isProduction),
+      enableVerboseLogging: parseBoolean(process.env.ENABLE_VERBOSE_LOGGING, !isProduction),
+      requestTimeoutMs: parseTimeout(process.env.REQUEST_TIMEOUT_MS, 15000),
       firebaseApiKey: process.env.FIREBASE_API_KEY,
       firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
       firebaseProjectId: process.env.FIREBASE_PROJECT_ID,

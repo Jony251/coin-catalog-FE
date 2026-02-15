@@ -9,19 +9,20 @@
 
 import { firestoreDatabaseService } from './FirestoreDatabaseService';
 import { userCollectionService } from './UserCollectionService';
+import { logger } from '../utils/logger';
 
 // Initialize database
 export async function initDatabase(userId = null) {
   // Инициализируем оба сервиса
   await firestoreDatabaseService.initialize();
   await userCollectionService.initialize(userId);
-  console.log('Database initialized (using Firestore)', userId ? `for user ${userId}` : '');
+  logger.debug('database', 'Database initialized (Firestore)', userId ? `for user ${userId}` : '');
 }
 
 // Set user ID for collection service
 export async function setUserId(userId) {
   userCollectionService.userId = userId;
-  console.log('UserCollectionService userId set to:', userId);
+  logger.debug('database', 'UserCollectionService userId set', userId);
 }
 
 // Get all rulers
