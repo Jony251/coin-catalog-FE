@@ -41,6 +41,7 @@ User (Firebase Authentication)
 
 Основные документы:
 - `README.md` — базовая документация по приложению
+- `PRODUCT_PLAN.md` — продуктовый план (free/pro фичи, roadmap, новые опции)
 - `FIREBASE_SETUP.md` — настройка Firebase
 - `PRODUCTION_READINESS.md` — чеклист вывода full-stack проекта в production
 
