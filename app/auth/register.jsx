@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../stores/authStore';
 import PricingPlans from '../../components/PricingPlans';
+import { logger } from '../../utils/logger';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -85,12 +86,11 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    console.log('=== handleRegister called ===');
-    console.log('Form data:', { nickname, email, hasPassword: !!password, hasConfirmPassword: !!confirmPassword, captchaVerified, hasPhoto: !!photo });
+    logger.debug('register-screen', 'handleRegister called');
     
     // Валидация ника
     if (!nickname || !nickname.trim()) {
-      console.log('Validation failed: nickname empty');
+      logger.debug('register-screen', 'Validation failed: nickname empty');
       Alert.alert('Ошибка', 'Введите никнейм');
       return;
     }
@@ -136,13 +136,11 @@ export default function RegisterScreen() {
 
     try {
       setLoading(true);
-      console.log('Calling register with:', { email, password: '***', nickname, hasPhoto: !!photo });
+      logger.debug('register-screen', 'Calling register');
       const result = await register(email, password, nickname, photo);
-      
-      console.log('Registration result:', result);
 
       if (result.success) {
-        console.log('Registration successful, showing verification message');
+        logger.debug('register-screen', 'Registration successful');
         
         const verificationMessage = 'Регистрация успешна!\n\nНа ваш email отправлено письмо с подтверждением.\n\nПожалуйста, подтвердите email в течение 24 часов, иначе аккаунт будет удален.';
         
@@ -155,7 +153,7 @@ export default function RegisterScreen() {
           ]);
         }
       } else {
-        console.error('Registration failed:', result.error);
+        logger.warn('register-screen', 'Registration failed', result.error);
         if (Platform.OS === 'web') {
           window.alert('Ошибка: ' + (result.error || 'Не удалось зарегистрироваться'));
         } else {
@@ -163,7 +161,7 @@ export default function RegisterScreen() {
         }
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('register-screen', 'Registration error', error);
       if (Platform.OS === 'web') {
         window.alert('Ошибка: Произошла ошибка при регистрации');
       } else {

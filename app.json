@@ -35,7 +35,11 @@
       "expo-secure-store"
     ],
     "extra": {
-      "apiUrl": "http://192.168.10.6:3000"
+      "appEnv": "development",
+      "apiUrl": "",
+      "allowOfflineAuth": true,
+      "enableVerboseLogging": true,
+      "requestTimeoutMs": 15000
     }
   }
 }
